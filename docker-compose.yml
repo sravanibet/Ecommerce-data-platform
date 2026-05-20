@@ -12,6 +12,10 @@ x-airflow-common: &airflow-common
     airflow-postgres:
       condition: service_healthy
 
+networks:
+  airflow_network:
+    driver: bridge
+
 services:
 
   airflow-postgres:
@@ -132,6 +136,38 @@ services:
     volumes:
       - ./data:/home/jovyan/work/data
       - spark-warehouse:/home/jovyan/work/warehouse
+
+  spark:
+    container_name: spark
+    environment:
+      SPARK_LOCAL_STORAGE_ENCRYPTION_ENABLED: "no"
+      SPARK_MODE: master
+      SPARK_RPC_AUTHENTICATION_ENABLED: "no"
+      SPARK_RPC_ENCRYPTION_ENABLED: "no"
+      SPARK_SSL_ENABLED: "no"
+    image: bitnami/spark:latest
+    networks:
+      default: null
+    ports:
+      - mode: ingress
+        target: 7078
+        published: "7078"
+        protocol: tcp
+      - mode: ingress
+        target: 8081
+        published: "8081"
+        protocol: tcp
+    volumes:
+      - type: bind
+        source: C:\Users\sbsra\OneDrive\Documents\data engineer_mi\ecommerce-data-platform\spark_jobs
+        target: /opt/spark_jobs
+        bind:
+          create_host_path: true
+      - type: bind
+        source: C:\Users\sbsra\OneDrive\Documents\data engineer_mi\ecommerce-data-platform\data
+        target: /opt/data
+        bind:
+          create_host_path: true
 
 volumes:
   airflow-postgres-db:
