@@ -1,0 +1,24 @@
+## This requirements file lists Python libraries useful for running
+## the example ETL modules in `retail_etl/` and for running Airflow/Spark
+## locally for development.
+##
+## Instructions: install into a virtualenv used for local development.
+## The code in `retail_etl/` uses PySpark DataFrame APIs; Airflow DAGs
+## in the project expect an Airflow environment when deployed.
+##
+# Core dependencies for the ETL examples
+pyspark==3.4.1
+pyarrow
+pandas
+
+# Optional / dev: if you want to run Airflow locally
+apache-airflow==2.7.1
+
+# Notes:
+# - The sample ETL modules are intentionally minimal and use PySpark APIs.
+# - In production, use the cluster's Spark distribution and configure
+#   dependencies via your cluster packaging (not always via pip).
+# - If you deploy DAGs to Airflow, install only the Airflow extras you
+#   need and prefer using constrained dependency files maintained by your
+#   platform/ops team.
+
