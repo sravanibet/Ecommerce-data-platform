@@ -1,8 +1,9 @@
 from datetime import datetime, timedelta
+
 from airflow import DAG
 from airflow.operators.bash import BashOperator
 
-# Define default arguments for the DAG
+# Default arguments
 default_args = {
     'owner': 'airflow',
     'depends_on_past': False,
@@ -12,20 +13,20 @@ default_args = {
     'retry_delay': timedelta(minutes=5),
 }
 
-# Define the DAG
+# Define DAG
 with DAG(
-    'orders_etl_dag',
+    dag_id='orders_etl_dag',
     default_args=default_args,
-    description='DAG to trigger orders ETL Spark job',
-    schedule_interval=timedelta(days=1),
-    start_date=datetime(2023, 1, 1),
+    description='Orders ETL Spark Pipeline',
+    schedule_interval='@daily',
+    start_date=datetime(2025, 1, 1),
     catchup=False,
 ) as dag:
 
-    # Task to run the Spark job
-    run_spark_job = BashOperator(
+    # Run Spark ETL Job
+    run_orders_etl = BashOperator(
         task_id='run_orders_etl',
-        bash_command='spark-submit --master spark://spark-master:7077 /opt/spark_jobs/orders_etl.py'
+        bash_command='python /opt/spark_jobs/orders_etl.py'
     )
 
-    run_spark_job
+    run_orders_etl

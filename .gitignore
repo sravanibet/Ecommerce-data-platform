@@ -1,6 +1,7 @@
+.ipynb_checkpoints/
+logs/
+__pycache__/
 data/processed/
 *.parquet
 *.crc
 _temporary/
-.ipynb_checkpoints/
-__pycache__/
