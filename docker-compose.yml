@@ -1,5 +1,7 @@
 x-airflow-common: &airflow-common
-  image: apache/airflow:2.9.3-python3.11
+  build:
+    context: .
+    dockerfile: docker/Dockerfile.airflow
 
   environment:
     AIRFLOW__CORE__EXECUTOR: LocalExecutor
@@ -8,12 +10,18 @@ x-airflow-common: &airflow-common
     AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION: "false"
     AIRFLOW__LOGGING__BASE_LOG_FOLDER: /opt/airflow/logs
     AIRFLOW__LOGGING__REMOTE_LOGGING: "False"
+    PROJECT_DIR: /opt/workspace
+    SPARK_MASTER_URL: spark://spark-master:7077
+    SPARK_CONF_DIR: /opt/hive/conf
+    JAVA_HOME: /usr/lib/jvm/java-17-openjdk-amd64
 
   volumes:
     - ./dags:/opt/airflow/dags
-    - ./data:/opt/airflow/data
-    - ./spark_jobs:/opt/spark_jobs
-    - ./logs:/opt/airflow/logs
+    - ./data:/opt/workspace/data
+    - ./spark_jobs:/opt/workspace/spark_jobs
+    - ./hive/conf:/opt/hive/conf
+    - spark-warehouse:/opt/hive/data/warehouse
+    - airflow-logs:/opt/airflow/logs
 
   depends_on:
     airflow-postgres:
@@ -49,6 +57,10 @@ services:
     command:
       - -c
       - >
+        mkdir -p /opt/airflow/logs/scheduler /opt/airflow/logs/dag_processor_manager &&
+        mkdir -p /opt/hive/data/warehouse &&
+        chown -R 50000:0 /opt/hive/data/warehouse &&
+        chown -R 50000:0 /opt/airflow/logs &&
         airflow db migrate &&
         airflow users create
         --username admin
@@ -65,7 +77,7 @@ services:
     command: webserver
 
     ports:
-      - "8088:8080"
+      - "8081:8080"
 
     healthcheck:
       test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:8080/health')\""]
@@ -112,8 +124,14 @@ services:
       - "8080:8080"
       - "7077:7077"
 
+    environment:
+      SPARK_CONF_DIR: /opt/hive/conf
+
     volumes:
-      - ./data:/home/jovyan/work/data
+      - ./data:/opt/workspace/data
+      - ./spark_jobs:/opt/workspace/spark_jobs
+      - ./hive/conf:/opt/hive/conf
+      - spark-warehouse:/opt/hive/data/warehouse
 
   spark-worker:
     image: apache/spark:3.5.0
@@ -123,6 +141,9 @@ services:
 
     depends_on:
       - spark-master
+
+    environment:
+      SPARK_CONF_DIR: /opt/hive/conf
 
     command:
       - /opt/spark/bin/spark-class
@@ -136,51 +157,27 @@ services:
       - 2g
 
     volumes:
-      - ./data:/home/jovyan/work/data
-      - spark-warehouse:/home/jovyan/work/warehouse
+      - ./data:/opt/workspace/data
+      - ./spark_jobs:/opt/workspace/spark_jobs
+      - ./hive/conf:/opt/hive/conf
+      - spark-warehouse:/opt/hive/data/warehouse
 
-  jupyter:
-    image: jupyter/pyspark-notebook:spark-3.5.0
-    container_name: jupyter
-    user: "0:0"
-
-    environment:
-      CHOWN_EXTRA: /home/jovyan/work/warehouse
-      CHOWN_EXTRA_OPTS: -R
-
-    command: >
-      start-notebook.py
-      --ServerApp.token=''
-      --ServerApp.password=''
-      --ServerApp.allow_remote_access=True
-
-    ports:
-      - "8888:8888"
-
-    volumes:
-      - ./data:/home/jovyan/work/data
-      - ./spark_jobs:/home/jovyan/work/spark_jobs
-      - spark-warehouse:/home/jovyan/work/warehouse
-
-  spark:
-    image: bitnami/spark:latest
-    container_name: spark
+  hive-metastore:
+    image: apache/hive:3.1.3
+    container_name: hive-metastore
 
     environment:
-      SPARK_LOCAL_STORAGE_ENCRYPTION_ENABLED: "no"
-      SPARK_MODE: master
-      SPARK_RPC_AUTHENTICATION_ENABLED: "no"
-      SPARK_RPC_ENCRYPTION_ENABLED: "no"
-      SPARK_SSL_ENABLED: "no"
+      SERVICE_NAME: metastore
+      HIVE_CUSTOM_CONF_DIR: /opt/hive/conf
 
     ports:
-      - "7078:7078"
-      - "8081:8081"
+      - "9083:9083"
 
     volumes:
-      - ./spark_jobs:/opt/spark_jobs
-      - ./data:/opt/data
+      - ./hive/conf:/opt/hive/conf
+      - spark-warehouse:/opt/hive/data/warehouse
 
 volumes:
   airflow-postgres-db:
   spark-warehouse:
+  airflow-logs:

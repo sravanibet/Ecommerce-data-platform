@@ -1,45 +1,66 @@
+from datetime import datetime
+
 from pyspark.sql import SparkSession
-from pyspark.sql.functions import *
+from pyspark.sql.functions import col, to_date
 
-# Create Spark session
-spark = SparkSession.builder \
-    .master("spark://spark-master:7077") \
-    .appName("Orders ETL") \
-    .getOrCreate()
 
-# Read CSV file
-orders = spark.read.csv(
-    "/home/jovyan/work/data/raw/orders.csv",
-    header=True,
-    inferSchema=True
-)
+def main():
+    spark = (
+        SparkSession.builder
+        .master("spark://spark-master:7077")
+        .appName("Orders ETL")
+        .enableHiveSupport()
+        .getOrCreate()
+    )
 
-print("Raw Orders Data:")
-orders.show()
+    spark._jsc.hadoopConfiguration().set(
+        "mapreduce.fileoutputcommitter.algorithm.version", "2"
+    )
 
-# Remove duplicate rows
-clean_orders = orders.dropDuplicates()
+    run_id = datetime.utcnow().strftime("%Y%m%d_%H%M%S")
+    output_path = f"/opt/workspace/data/processed/orders_{run_id}"
+    table_path = f"/opt/hive/data/warehouse/ecommerce.db/orders_clean_{run_id}"
 
-# Create total_amount column
-clean_orders = clean_orders.withColumn(
-    "total_amount",
-    col("quantity") * col("price")
-)
+    orders = spark.read.csv(
+        "/opt/workspace/data/raw/orders.csv",
+        header=True,
+        inferSchema=True,
+    )
 
-# Convert timestamp to date
-clean_orders = clean_orders.withColumn(
-    "order_date",
-    to_date(col("order_timestamp"))
-)
+    clean_orders = (
+        orders.dropDuplicates()
+        .withColumn("total_amount", col("quantity") * col("price"))
+        .withColumn("order_date", to_date(col("order_timestamp")))
+    )
 
-print("Transformed Orders Data:")
-clean_orders.show()
+    print("Raw Orders Data:")
+    orders.show()
 
-# Save processed data as parquet
-clean_orders.write.mode("overwrite").parquet(
-    "/home/jovyan/work/data/processed/orders_parquet"
-)
+    print("Transformed Orders Data:")
+    clean_orders.show()
 
-print("ETL completed successfully")
+    clean_orders.write.mode("overwrite").parquet(output_path)
 
-spark.stop()
+    spark.sql("CREATE DATABASE IF NOT EXISTS ecommerce")
+    spark.sql("DROP TABLE IF EXISTS ecommerce.orders_clean")
+    clean_orders.write.mode("overwrite").option("path", table_path).saveAsTable(
+        "ecommerce.orders_clean"
+    )
+
+    spark.sql(
+        """
+        SELECT
+            customer_id,
+            SUM(total_amount) AS revenue
+        FROM ecommerce.orders_clean
+        GROUP BY customer_id
+        ORDER BY revenue DESC
+        """
+    ).show()
+
+    print("ETL completed successfully")
+    spark.stop()
+
+
+if __name__ == "__main__":
+    main()
