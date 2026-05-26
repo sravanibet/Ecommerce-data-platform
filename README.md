@@ -124,3 +124,46 @@ You should see:
 - Use notebooks for experimenting.
 - Use `.py` files for reusable pipeline code.
 - Use Airflow for automation.
+
+## ETL code (easy-to-read modules)
+
+For a simpler view of the ETL steps, the Spark job is split into small modules:
+
+- `retail_etl/extract.py` - create Spark session + read CSV
+- `retail_etl/transform.py` - cleaning + derived columns
+- `retail_etl/load.py` - write Parquet + write Hive table
+
+The orchestrating entry script is still:
+- `spark_jobs/orders_etl.py`
+
+## Phase 2: Warehouse (fact + dimensions)
+
+Phase 2 adds multiple source tables and builds a simple star schema:
+
+- Raw inputs:
+  - `data/raw/orders.csv`
+  - `data/raw/customers.csv`
+  - `data/raw/products.csv`
+- Spark warehouse job: `spark_jobs/warehouse_etl.py`
+- Airflow DAG: `dags/warehouse_pipeline.py`
+
+### Run the warehouse ETL manually
+
+```powershell
+docker compose exec airflow-webserver python /opt/workspace/spark_jobs/warehouse_etl.py
+```
+
+Expected:
+- `orders` is cleaned and joined to `customers` + `products` (broadcast join for products)
+- partitioned Parquet is written under `data/processed/`
+- Hive tables are created:
+  - `ecommerce.fact_orders` (partitioned by `order_date`)
+  - `ecommerce.dim_customers`
+  - `ecommerce.dim_products`
+
+### Phase 2 processed folder layout
+
+- `data/processed/fact_orders/run_id=.../order_date=.../` (partitioned by `order_date`)
+- `data/processed/dimensions/dim_customers/run_id=.../`
+- `data/processed/dimensions/dim_products/run_id=.../`
+- `data/processed/orders/orders_clean/run_id=.../` (optional debugging output)

@@ -19,6 +19,7 @@ x-airflow-common: &airflow-common
     - ./dags:/opt/airflow/dags
     - ./data:/opt/workspace/data
     - ./spark_jobs:/opt/workspace/spark_jobs
+    - ./retail_etl:/opt/workspace/retail_etl
     - ./hive/conf:/opt/hive/conf
     - spark-warehouse:/opt/hive/data/warehouse
     - airflow-logs:/opt/airflow/logs
@@ -130,6 +131,7 @@ services:
     volumes:
       - ./data:/opt/workspace/data
       - ./spark_jobs:/opt/workspace/spark_jobs
+      - ./retail_etl:/opt/workspace/retail_etl
       - ./hive/conf:/opt/hive/conf
       - spark-warehouse:/opt/hive/data/warehouse
 
@@ -159,6 +161,7 @@ services:
     volumes:
       - ./data:/opt/workspace/data
       - ./spark_jobs:/opt/workspace/spark_jobs
+      - ./retail_etl:/opt/workspace/retail_etl
       - ./hive/conf:/opt/hive/conf
       - spark-warehouse:/opt/hive/data/warehouse
 
