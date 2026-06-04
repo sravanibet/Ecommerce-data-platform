@@ -167,3 +167,112 @@ Expected:
 - `data/processed/dimensions/dim_customers/run_id=.../`
 - `data/processed/dimensions/dim_products/run_id=.../`
 - `data/processed/orders/orders_clean/run_id=.../` (optional debugging output)
+
+## Phase 3: Real-Time Streaming and Lakehouse
+
+Phase 3 adds enterprise-grade streaming, Delta Lake, Kafka, and monitoring.
+
+### New Stack Components
+
+- `kafka` and `zookeeper` added to `docker-compose.yml`
+- `prometheus` and `grafana` added for monitoring
+- `delta-spark` added to `requirements.txt`
+- `kafka-python` added for producing events
+
+### New files
+
+- `spark_jobs/streaming_pipeline.py` — Spark Structured Streaming medallion pipeline (bronze/silver/gold)
+- `spark_jobs/delta_merge_orders.py` — Delta Lake merge/upsert example for CDC
+- `dags/streaming_pipeline_dag.py` — Airflow streaming DAG with sensors, task groups, SLA, retries, and backfill support
+- `streaming/order_producer.py` — Kafka producer for order events
+- `streaming/validate_streams.py` — simple Delta output validation
+- `monitoring/prometheus.yml` — Prometheus scrape configuration
+- `.github/workflows/ci.yml` — GitHub Actions CI for syntax checks
+
+### Phase 3 architecture
+
+The new end-to-end flow is:
+
+```text
+Website/App Events
+        ↓
+Kafka Streaming
+        ↓
+Spark Structured Streaming
+        ↓
+Bronze Delta
+        ↓
+Silver Delta
+        ↓
+Gold Aggregations
+        ↓
+Hive / Delta Tables
+        ↓
+Airflow Orchestration
+        ↓
+Analytics Dashboard
+```
+
+### Start the full stack
+
+```powershell
+docker compose down
+docker compose up --build -d
+docker compose ps
+```
+
+Expected new services:
+- `zookeeper`
+- `kafka`
+- `prometheus`
+- `grafana`
+
+### Create and produce streaming events
+
+From the host or inside the Airflow container:
+
+```powershell
+docker compose exec airflow-webserver python /opt/workspace/streaming/order_producer.py
+```
+
+This sends sample order events to the Kafka `orders` topic.
+
+### Run the streaming pipeline
+
+```powershell
+docker compose exec airflow-webserver python /opt/workspace/spark_jobs/streaming_pipeline.py --duration 120
+```
+
+This Spark job uses Spark package downloads for Kafka and Delta and writes the Ivy cache into `/tmp/.ivy2` inside the container.
+
+This Spark job:
+- reads streaming events from Kafka
+- writes raw events to Delta bronze
+- cleans and enriches events to Delta silver
+- performs windowed gold aggregations and materializes a Delta gold path
+- registers `ecommerce.orders_gold` as a Delta Hive table
+
+### Run the Airflow streaming DAG
+
+Open Airflow at `http://localhost:8081` and enable `streaming_pipeline`.
+
+The DAG includes:
+- a Kafka readiness sensor
+- dynamic streaming tasks grouped in a TaskGroup
+- retry policy and SLA monitoring
+- backfill-friendly hourly schedule
+
+### Run Delta Lake merge/upsert demo
+
+```powershell
+docker compose exec airflow-webserver python /opt/workspace/spark_jobs/delta_merge_orders.py
+```
+
+This demonstrates a lakehouse CDC pattern with Delta merge/upsert.
+
+### Monitoring
+
+- Prometheus: `http://localhost:9090`
+- Grafana: `http://localhost:3000`
+
+Note: Prometheus and Grafana are available as a monitoring stack. Spark and Airflow endpoints are configured as scrape targets in `monitoring/prometheus.yml`.
